@@ -1,0 +1,335 @@
+---
+apiVersion: helm.toolkit.fluxcd.io/v2beta1
+kind: HelmRelease
+metadata:
+  name: podinfo
+  namespace: testv1
+spec:
+  chart:
+    spec:
+      chart: hashicorp/vault
+      reconcileStrategy: ChartVersion
+      sourceRef:
+        kind: HelmRepository
+        name: podinfo
+      version: 0.20.1
+  interval: 1m0s
+  releaseName: podinfo
+  values:
+    csi:
+      daemonSet:
+        annotations: {}
+        extraLabels: {}
+        kubeletRootDir: /var/lib/kubelet
+        providersDir: /etc/kubernetes/secrets-store-csi-providers
+        updateStrategy:
+          maxUnavailable: ""
+          type: RollingUpdate
+      debug: false
+      enabled: false
+      extraArgs: []
+      image:
+        pullPolicy: IfNotPresent
+        repository: hashicorp/vault-csi-provider
+        tag: 1.1.0
+      livenessProbe:
+        failureThreshold: 2
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        successThreshold: 1
+        timeoutSeconds: 3
+      pod:
+        annotations: {}
+        extraLabels: {}
+        tolerations: []
+      priorityClassName: ""
+      readinessProbe:
+        failureThreshold: 2
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        successThreshold: 1
+        timeoutSeconds: 3
+      resources: {}
+      serviceAccount:
+        annotations: {}
+        extraLabels: {}
+      volumeMounts: null
+      volumes: null
+    global:
+      enabled: true
+      externalVaultAddr: ""
+      imagePullSecrets: []
+      openshift: false
+      psp:
+        annotations: |
+          seccomp.security.alpha.kubernetes.io/allowedProfileNames: docker/default,runtime/default
+          apparmor.security.beta.kubernetes.io/allowedProfileNames: runtime/default
+          seccomp.security.alpha.kubernetes.io/defaultProfileName:  runtime/default
+          apparmor.security.beta.kubernetes.io/defaultProfileName:  runtime/default
+        enable: false
+      tlsDisable: true
+    injector:
+      affinity: |
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ template "vault.name" . }}-agent-injector
+                  app.kubernetes.io/instance: "{{ .Release.Name }}"
+                  component: webhook
+              topologyKey: kubernetes.io/hostname
+      agentDefaults:
+        cpuLimit: 500m
+        cpuRequest: 250m
+        memLimit: 128Mi
+        memRequest: 64Mi
+        template: map
+        templateConfig:
+          exitOnRetryFailure: true
+          staticSecretRenderInterval: ""
+      agentImage:
+        repository: hashicorp/vault
+        tag: 1.10.3
+      annotations: {}
+      authPath: auth/kubernetes
+      certs:
+        caBundle: ""
+        certName: tls.crt
+        keyName: tls.key
+        secretName: null
+      enabled: '-'
+      externalVaultAddr: ""
+      extraEnvironmentVars: {}
+      extraLabels: {}
+      failurePolicy: Ignore
+      hostNetwork: false
+      image:
+        pullPolicy: IfNotPresent
+        repository: hashicorp/vault-k8s
+        tag: 0.16.1
+      leaderElector:
+        enabled: true
+      logFormat: standard
+      logLevel: info
+      metrics:
+        enabled: false
+      namespaceSelector: {}
+      nodeSelector: {}
+      objectSelector: {}
+      podDisruptionBudget: {}
+      port: 8080
+      priorityClassName: ""
+      replicas: 1
+      resources: {}
+      revokeOnShutdown: false
+      service:
+        annotations: {}
+      strategy: {}
+      tolerations: []
+      topologySpreadConstraints: []
+      webhook:
+        annotations: {}
+        failurePolicy: Ignore
+        matchPolicy: Exact
+        namespaceSelector: {}
+        objectSelector: |
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: NotIn
+            values:
+            - {{ template "vault.name" . }}-agent-injector
+        timeoutSeconds: 30
+      webhookAnnotations: {}
+    server:
+      affinity: |
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app.kubernetes.io/name: {{ template "vault.name" . }}
+                  app.kubernetes.io/instance: "{{ .Release.Name }}"
+                  component: server
+              topologyKey: kubernetes.io/hostname
+      annotations: {}
+      auditStorage:
+        accessMode: ReadWriteOnce
+        annotations: {}
+        enabled: false
+        mountPath: /vault/audit
+        size: 10Gi
+        storageClass: null
+      authDelegator:
+        enabled: true
+      dataStorage:
+        accessMode: ReadWriteOnce
+        annotations: {}
+        enabled: true
+        mountPath: /vault/data
+        size: 10Gi
+        storageClass: null
+      dev:
+        devRootToken: root
+        enabled: false
+      enabled: '-'
+      enterpriseLicense:
+        secretKey: license
+        secretName: ""
+      extraArgs: ""
+      extraContainers: null
+      extraEnvironmentVars: {}
+      extraInitContainers: null
+      extraLabels: {}
+      extraSecretEnvironmentVars: []
+      extraVolumes: []
+      ha:
+        apiAddr: null
+        clusterAddr: null
+        config: |
+          ui = true
+
+          listener "tcp" {
+            tls_disable = 1
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+          }
+          storage "consul" {
+            path = "vault"
+            address = "HOST_IP:8500"
+          }
+
+          service_registration "kubernetes" {}
+
+          # Example configuration for using auto-unseal, using Google Cloud KMS. The
+          # GKMS keys must already exist, and the cluster must have a service account
+          # that is authorized to access GCP KMS.
+          #seal "gcpckms" {
+          #   project     = "vault-helm-dev-246514"
+          #   region      = "global"
+          #   key_ring    = "vault-helm-unseal-kr"
+          #   crypto_key  = "vault-helm-unseal-key"
+          #}
+        disruptionBudget:
+          enabled: true
+          maxUnavailable: null
+        enabled: false
+        raft:
+          config: |
+            ui = true
+
+            listener "tcp" {
+              tls_disable = 1
+              address = "[::]:8200"
+              cluster_address = "[::]:8201"
+            }
+
+            storage "raft" {
+              path = "/vault/data"
+            }
+
+            service_registration "kubernetes" {}
+          enabled: false
+          setNodeId: false
+        replicas: 3
+      image:
+        pullPolicy: IfNotPresent
+        repository: hashicorp/vault
+        tag: 1.10.3
+      ingress:
+        activeService: true
+        annotations: {}
+        enabled: false
+        extraPaths: []
+        hosts:
+        - host: chart-example.local
+          paths: []
+        ingressClassName: ""
+        labels: {}
+        pathType: Prefix
+        tls: []
+      livenessProbe:
+        enabled: false
+        failureThreshold: 2
+        initialDelaySeconds: 60
+        path: /v1/sys/health?standbyok=true
+        periodSeconds: 5
+        successThreshold: 1
+        timeoutSeconds: 3
+      logFormat: ""
+      logLevel: ""
+      networkPolicy:
+        egress: []
+        enabled: false
+      nodeSelector: {}
+      postStart: []
+      preStopSleepSeconds: 5
+      priorityClassName: ""
+      readinessProbe:
+        enabled: true
+        failureThreshold: 2
+        initialDelaySeconds: 5
+        periodSeconds: 5
+        successThreshold: 1
+        timeoutSeconds: 3
+      resources: {}
+      route:
+        activeService: true
+        annotations: {}
+        enabled: false
+        host: chart-example.local
+        labels: {}
+        tls:
+          termination: passthrough
+      service:
+        annotations: {}
+        enabled: true
+        externalTrafficPolicy: Cluster
+        port: 8200
+        publishNotReadyAddresses: true
+        targetPort: 8200
+      serviceAccount:
+        annotations: {}
+        create: true
+        name: ""
+      shareProcessNamespace: false
+      standalone:
+        config: |
+          ui = true
+
+          listener "tcp" {
+            tls_disable = 1
+            address = "[::]:8200"
+            cluster_address = "[::]:8201"
+          }
+          storage "file" {
+            path = "/vault/data"
+          }
+
+          # Example configuration for using auto-unseal, using Google Cloud KMS. The
+          # GKMS keys must already exist, and the cluster must have a service account
+          # that is authorized to access GCP KMS.
+          #seal "gcpckms" {
+          #   project     = "vault-helm-dev"
+          #   region      = "global"
+          #   key_ring    = "vault-helm-unseal-kr"
+          #   crypto_key  = "vault-helm-unseal-key"
+          #}
+        enabled: '-'
+      statefulSet:
+        annotations: {}
+      terminationGracePeriodSeconds: 10
+      tolerations: []
+      topologySpreadConstraints: []
+      updateStrategyType: OnDelete
+      volumeMounts: null
+      volumes: null
+    ui:
+      activeVaultPodOnly: false
+      annotations: {}
+      enabled: false
+      externalPort: 8200
+      externalTrafficPolicy: Cluster
+      publishNotReadyAddresses: true
+      serviceNodePort: null
+      serviceType: ClusterIP
+      targetPort: 8200
+
